@@ -12,6 +12,7 @@ from glob import glob
 import numpy as np
 import urllib.request
 from copy import deepcopy
+import json
 import ruamel.yaml as yaml
 from tqdm.auto import tqdm
 from cytoolz import partial
@@ -176,6 +177,50 @@ def aggregate_extract_results_wrapper(
 
     print(f"Index file path: {indexpath}")
     return indexpath
+
+
+def brute_force_aggregate_results(input_dir, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+
+    folders = [
+        f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))
+    ]
+
+    for folder in tqdm(folders, desc="Processing folders"):
+        folder_path = os.path.join(input_dir, folder)
+        metadata_path = os.path.join(folder_path, "metadata.json")
+        if not os.path.exists(metadata_path):
+            continue
+
+        try:
+            with open(metadata_path) as f:
+                metadata = json.load(f)
+
+            datetime = metadata.get("StartTime", "unknown_time")
+            session = metadata.get("SessionName", "unknown_session")
+            subject = metadata.get("SubjectName", "unknown_subject")
+
+            proc_path = os.path.join(folder_path, "proc")
+            if not os.path.exists(proc_path):
+                continue
+
+            naming_convention = f"{datetime}_{session}_{subject}"
+
+            file_types = [("video", ".mp4"), ("H5", ".h5"), ("YAML", ".yaml")]
+
+            for file_type, extension in file_types:
+                files = [
+                    file for file in os.listdir(proc_path) if file.endswith(extension)
+                ]
+                if files:
+                    src_file = os.path.join(proc_path, files[0])
+                    dst_file = os.path.join(
+                        output_dir, f"{naming_convention}{extension}"
+                    )
+                    shutil.copyfile(src_file, dst_file)
+
+        except Exception:
+            continue
 
 
 def generate_index_from_agg_res_wrapper(input_dir):
